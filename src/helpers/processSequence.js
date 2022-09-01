@@ -26,9 +26,10 @@ import Api from '../tools/api';
     const validateLength = compose(allPass([testLowerBoundLength, testUpperBoundLength]), getStringLength);
     const validateFloat = curry(test)(/^\d+\.?\d+$/);
     const validate = allPass([validateLength, validateFloat]);
-    const toIntCeil = Math.ceil;
-    const checkValidation = ifElse(validate, () => toIntCeil(value), () => {throw new Error('ValidationError')});
-    const safeValidation = tryCatch(checkValidation, (e) => {handleError(e.message); return 'NaN'});
+    const checkValidation = curry(ifElse)(validate);
+    const throwError = (message, value) => {throw new Error(message)};
+    const onValidationSuccess = Math.ceil;
+    const onValidationFailure = curry(throwError)('ValidationError');
 
     const convertBase = curry(api.get)('https://api.tech/numbers/base');
     const toBinaryPrepare = (number) => ({
@@ -37,41 +38,52 @@ import Api from '../tools/api';
         number: number
     });
     const toBinary = compose(convertBase, toBinaryPrepare);
+
     const loggedResponse = ({result}) => {
-        writeLog(result); 
-        return result
-    }
+        writeLog(result);
+        return result;
+    };
+
     const logger = (arg) => {
         writeLog(arg);
         return arg;
-    }
+    };
     const loggedCountBinaryDigits = compose(logger, getStringLength);
     const square = (n) => n*n;
     const loggedSquare = compose(logger, square);
     const modulo3 = partialRight(modulo, [3]);
-    const loggedModulo3 = compose(logger, modulo3)
+    const loggedModulo3 = compose(logger, modulo3);
 
     const getAnimal = (id) => {
         return api.get(`https://animals.tech/${id}`, {})
     }
     const logSuccess = ({result}) => {handleSuccess(result)};
 
-    const app =  compose(
-        otherwise((e) => {handleError(e)}),
+    const apiErrorHandler = (e) => {handleError(e)};
+    const errorHandler = (e) => {handleError(e.message)};
+
+    const onToBinarySuccess = compose(
+        otherwise(apiErrorHandler),
         andThen(logSuccess),
-        andThen(getAnimal),
-        andThen(loggedModulo3),
-        andThen(loggedSquare),
-        andThen(loggedCountBinaryDigits),
-        otherwise((e) => {handleError(e)}),
-        andThen(loggedResponse),
-        toBinary,
-        tap(writeLog),
-        safeValidation,
-        tap(writeLog)
+        getAnimal,
+        loggedModulo3,
+        loggedSquare,
+        loggedCountBinaryDigits,
+        loggedResponse
     )
 
-    app(value);
- }
+    const app =  compose(
+        otherwise(apiErrorHandler),
+        andThen(onToBinarySuccess),
+        toBinary,
+        tap(writeLog),
+        checkValidation(onValidationSuccess, onValidationFailure),
+        tap(writeLog)
+    );
+    
+    const safeApp = tryCatch(app, errorHandler);
 
- export default processSequence;
+    safeApp(value);
+}
+
+export default processSequence;

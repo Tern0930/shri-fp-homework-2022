@@ -13,7 +13,7 @@
  * Если какие либо функции написаны руками (без использования библиотек) это не является ошибкой
  */
 
-import { equals, prop, compose, allPass, anyPass, curry, values, count, lte, not } from "ramda";
+import { equals, prop, compose, allPass, anyPass, curry, values, count, lte, not, partialRight, converge } from "ramda";
 import { COLORS, SHAPES } from "../constants";
 
 const getColor = (color) => prop(color)(COLORS);
@@ -50,7 +50,10 @@ const isMoreColorAmount = (amount, isColorFunc, shapes) => {
 
 const isAllColor = (isColorFunc, shapes) => {
     const getLength = compose(prop('length'), values);
-    return isColorAmount(getLength(shapes), isColorFunc, shapes);
+    const passArgs = partialRight(isColorAmount, [isColorFunc, shapes]);
+    const res = compose(passArgs, getLength);
+
+    return res(shapes);
 }
 
 // 1. Красная звезда, зеленый квадрат, все остальные белые.
@@ -59,21 +62,21 @@ export const validateFieldN1 = (shapes) => {
     const isWhiteCircle = compose(isWhite, getCircle);
     const isRedStar = compose(isRed, getStar);
     const isGreenSquare = compose(isGreen, getSquare);
+    const res = allPass([isWhiteTriangle, isWhiteCircle, isRedStar, isGreenSquare]);
 
-    const isWhites = allPass([isWhiteTriangle, isWhiteCircle]);
-    const isGood = allPass([isRedStar, isGreenSquare]);
-
-    return allPass([isWhites, isGood])(shapes);
+    return res(shapes);
 };
 
 // 2. Как минимум две фигуры зеленые.
-export const validateFieldN2 = (shapes) => curry(isMoreColorAmount)(2, isGreen)(shapes);
+export const validateFieldN2 = (shapes) => isMoreColorAmount(2, isGreen, shapes);
 
 // 3. Количество красных фигур равно кол-ву синих.
 export const validateFieldN3 = (shapes) => {
     const countBlue = compose(curry(count)(isBlue), values);
     const countRed = compose(curry(count)(isRed), values);
-    return equals(countBlue(shapes), countRed(shapes));
+    const res = converge(equals, [countBlue, countRed]);
+
+    return res(shapes);
 };
 
 // 4. Синий круг, красная звезда, оранжевый квадрат треугольник любого цвета
@@ -81,7 +84,9 @@ export const validateFieldN4 = (shapes) => {
     const isBlueCircle = compose(isBlue, getCircle);
     const isRedStar = compose(isRed, getStar);
     const isOrangeSquare = compose(isOrange, getSquare);
-    return allPass([isBlueCircle, isRedStar, isOrangeSquare])(shapes);
+    const res = allPass([isBlueCircle, isRedStar, isOrangeSquare]);
+
+    return res(shapes);
 };
 
 // 5. Три фигуры одного любого цвета кроме белого (четыре фигуры одного цвета – это тоже true).
@@ -91,7 +96,9 @@ export const validateFieldN5 = (shapes) => {
     const blues = isMore3ColorAmount(isBlue);
     const oranges = isMore3ColorAmount(isOrange);
     const greens = isMore3ColorAmount(isGreen);
-    return anyPass([reds, blues, oranges, greens])(shapes)
+    const res = anyPass([reds, blues, oranges, greens]);
+
+    return res(shapes);
 };
 
 // 6. Ровно две зеленые фигуры (одна из зелёных – это треугольник), плюс одна красная. Четвёртая оставшаяся любого доступного цвета, но не нарушающая первые два условия
@@ -99,7 +106,9 @@ export const validateFieldN6 = (shapes) => {
     const is2Green = curry(isColorAmount)(2, isGreen);
     const isGreenTriangle = compose(isGreen, getTriangle);
     const is1Red = curry(isColorAmount)(1, isRed);
-    return allPass([is2Green, isGreenTriangle, is1Red])(shapes);
+    const res = allPass([is2Green, isGreenTriangle, is1Red]);
+
+    return res(shapes);
 };
 
 // 7. Все фигуры оранжевые.
@@ -107,13 +116,25 @@ export const validateFieldN7 = (shapes) => isAllColor(isOrange, shapes);
 
 // 8. Не красная и не белая звезда, остальные – любого цвета.
 export const validateFieldN8 = (shapes) => {
-    const isNotWhiteStar = compose(not, isWhite, getStar);
-    const isNotRedStar = compose(not, isRed, getStar);
-    return allPass([isNotRedStar, isNotWhiteStar])(shapes);
+    const isNotColorStar = (isColorFunc) => compose(not, isColorFunc, getStar);
+    const isNotWhiteStar = isNotColorStar(isWhite);
+    const isNotRedStar = isNotColorStar(isRed);
+    const res = allPass([isNotRedStar, isNotWhiteStar]);
+
+    return res(shapes);
 };
 
 // 9. Все фигуры зеленые.
 export const validateFieldN9 = (shapes) => isAllColor(isGreen, shapes);
 
 // 10. Треугольник и квадрат одного цвета (не белого), остальные – любого цвета
-export const validateFieldN10 = (shapes) => equals(getTriangle(shapes), getSquare(shapes));
+export const validateFieldN10 = (shapes) => {
+    const isNotWhite = compose(not, isWhite);
+    const isNotWhiteTriangle = compose(isNotWhite, getTriangle);
+    const isNotWhiteSquare = compose(isNotWhite, getSquare);
+    const notWhites = allPass([isNotWhiteSquare, isNotWhiteTriangle])
+    const sameColor = converge(equals, [getTriangle, getSquare]);
+    const res = allPass([notWhites, sameColor]);
+
+    return res(shapes);
+};
