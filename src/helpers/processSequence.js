@@ -14,38 +14,64 @@
  * Иногда промисы от API будут приходить в состояние rejected, (прямо как и API в реальной жизни)
  * Ответ будет приходить в поле {result}
  */
- import Api from '../tools/api';
+import { allPass, andThen, compose, curry, gte, ifElse, lte, modulo, otherwise, partialRight, prop, tap, test, tryCatch } from 'ramda';
+import Api from '../tools/api';
 
  const api = new Api();
 
- /**
-  * Я – пример, удали меня
-  */
- const wait = time => new Promise(resolve => {
-     setTimeout(resolve, time);
- })
-
  const processSequence = ({value, writeLog, handleSuccess, handleError}) => {
-     /**
-      * Я – пример, удали меня
-      */
-     writeLog(value);
+    const getStringLength = prop('length');
+    const testLowerBoundLength = curry(lte)(2);
+    const testUpperBoundLength = curry(gte)(10);
+    const validateLength = compose(allPass([testLowerBoundLength, testUpperBoundLength]), getStringLength);
+    const validateFloat = curry(test)(/^\d+\.?\d+$/);
+    const validate = allPass([validateLength, validateFloat]);
+    const toIntCeil = Math.ceil;
+    const checkValidation = ifElse(validate, () => toIntCeil(value), () => {throw new Error('ValidationError')});
+    const safeValidation = tryCatch(checkValidation, (e) => {handleError(e.message); return 'NaN'});
 
-     api.get('https://api.tech/numbers/base', {from: 2, to: 10, number: '01011010101'}).then(({result}) => {
-         writeLog(result);
-     });
+    const convertBase = curry(api.get)('https://api.tech/numbers/base');
+    const toBinaryPrepare = (number) => ({
+        from: 10,
+        to: 2,
+        number: number
+    });
+    const toBinary = compose(convertBase, toBinaryPrepare);
+    const loggedResponse = ({result}) => {
+        writeLog(result); 
+        return result
+    }
+    const logger = (arg) => {
+        writeLog(arg);
+        return arg;
+    }
+    const loggedCountBinaryDigits = compose(logger, getStringLength);
+    const square = (n) => n*n;
+    const loggedSquare = compose(logger, square);
+    const modulo3 = partialRight(modulo, [3]);
+    const loggedModulo3 = compose(logger, modulo3)
 
-     wait(2500).then(() => {
-         writeLog('SecondLog')
+    const getAnimal = (id) => {
+        return api.get(`https://animals.tech/${id}`, {})
+    }
+    const logSuccess = ({result}) => {handleSuccess(result)};
 
-         return wait(1500);
-     }).then(() => {
-         writeLog('ThirdLog');
+    const app =  compose(
+        otherwise((e) => {handleError(e)}),
+        andThen(logSuccess),
+        andThen(getAnimal),
+        andThen(loggedModulo3),
+        andThen(loggedSquare),
+        andThen(loggedCountBinaryDigits),
+        otherwise((e) => {handleError(e)}),
+        andThen(loggedResponse),
+        toBinary,
+        tap(writeLog),
+        safeValidation,
+        tap(writeLog)
+    )
 
-         return wait(400);
-     }).then(() => {
-         handleSuccess('Done');
-     });
+    app(value);
  }
 
  export default processSequence;
