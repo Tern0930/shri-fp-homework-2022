@@ -14,15 +14,15 @@
  * Иногда промисы от API будут приходить в состояние rejected, (прямо как и API в реальной жизни)
  * Ответ будет приходить в поле {result}
  */
-import { allPass, andThen, compose, curry, gte, ifElse, lte, modulo, otherwise, partialRight, prop, tap, test, tryCatch } from 'ramda';
+import { allPass, andThen, compose, curry, gt, ifElse, lt, modulo, otherwise, partialRight, prop, tap, test, tryCatch } from 'ramda';
 import Api from '../tools/api';
 
  const api = new Api();
 
  const processSequence = ({value, writeLog, handleSuccess, handleError}) => {
     const getStringLength = prop('length');
-    const testLowerBoundLength = curry(lte)(2);
-    const testUpperBoundLength = curry(gte)(10);
+    const testLowerBoundLength = curry(lt)(2);
+    const testUpperBoundLength = curry(gt)(10);
     const validateLength = compose(allPass([testLowerBoundLength, testUpperBoundLength]), getStringLength);
     const validateFloat = curry(test)(/^\d+\.?\d+$/);
     const validate = allPass([validateLength, validateFloat]);
